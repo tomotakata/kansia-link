@@ -22,8 +22,6 @@ function parseJson<T>(val: Json): T {
 export async function generateCompanyPdf(company: Company): Promise<Uint8Array> {
   // Dynamic import to avoid SSR/bundle issues
   const { jsPDF } = await import('jspdf')
-  const { readFileSync } = await import('fs')
-  const { join } = await import('path')
 
   const doc = new jsPDF({
     orientation: 'portrait',
@@ -32,13 +30,27 @@ export async function generateCompanyPdf(company: Company): Promise<Uint8Array> 
   })
 
   // Load and embed NotoSansJP font from filesystem (server-side)
+  // Try multiple paths to support both local dev and Vercel serverless
   try {
-    const fontPath = join(process.cwd(), 'public', 'fonts', 'NotoSansJP-Regular.ttf')
-    const fontBuffer = readFileSync(fontPath)
-    const fontBase64 = fontBuffer.toString('base64')
-    doc.addFileToVFS('NotoSansJP-Regular.ttf', fontBase64)
-    doc.addFont('NotoSansJP-Regular.ttf', 'NotoSansJP', 'normal')
-    doc.setFont('NotoSansJP')
+    const { readFileSync } = await import('fs')
+    const { join } = await import('path')
+    const cwd = process.cwd()
+    const candidatePaths = [
+      join(cwd, 'resources', 'fonts', 'NotoSansJP-Regular.ttf'),
+      join(cwd, 'public', 'fonts', 'NotoSansJP-Regular.ttf'),
+    ]
+    let fontBuffer: Buffer | null = null
+    for (const p of candidatePaths) {
+      try { fontBuffer = readFileSync(p); break } catch { /* try next */ }
+    }
+    if (fontBuffer) {
+      const fontBase64 = fontBuffer.toString('base64')
+      doc.addFileToVFS('NotoSansJP-Regular.ttf', fontBase64)
+      doc.addFont('NotoSansJP-Regular.ttf', 'NotoSansJP', 'normal')
+      doc.setFont('NotoSansJP')
+    } else {
+      console.error('NotoSansJP font not found in any candidate path')
+    }
   } catch (e) {
     console.warn('NotoSansJP font load failed:', e)
   }
