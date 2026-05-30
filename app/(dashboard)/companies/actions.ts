@@ -145,7 +145,7 @@ export async function createCompany(
 
   if (error) {
     console.error('createCompany error:', error)
-    return { error: '登録に失敗しました', success: false }
+    return { error: `登録に失敗しました: ${error.message} (code: ${error.code})`, success: false }
   }
 
   revalidatePath('/companies')
