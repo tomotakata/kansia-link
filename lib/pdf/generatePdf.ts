@@ -22,6 +22,8 @@ function parseJson<T>(val: Json): T {
 export async function generateCompanyPdf(company: Company): Promise<Uint8Array> {
   // Dynamic import to avoid SSR/bundle issues
   const { jsPDF } = await import('jspdf')
+  const { readFileSync } = await import('fs')
+  const { join } = await import('path')
 
   const doc = new jsPDF({
     orientation: 'portrait',
@@ -29,19 +31,16 @@ export async function generateCompanyPdf(company: Company): Promise<Uint8Array> 
     format: 'a4',
   })
 
-  // Load and embed NotoSansJP font
+  // Load and embed NotoSansJP font from filesystem (server-side)
   try {
-    const fontResponse = await fetch('/fonts/NotoSansJP-Regular.ttf')
-    if (fontResponse.ok) {
-      const fontBuffer = await fontResponse.arrayBuffer()
-      const fontBase64 = Buffer.from(fontBuffer).toString('base64')
-      doc.addFileToVFS('NotoSansJP-Regular.ttf', fontBase64)
-      doc.addFont('NotoSansJP-Regular.ttf', 'NotoSansJP', 'normal')
-      doc.setFont('NotoSansJP')
-    }
-  } catch {
-    // Font load failed; use default (may show tofu for Japanese)
-    console.warn('NotoSansJP font load failed, using fallback')
+    const fontPath = join(process.cwd(), 'public', 'fonts', 'NotoSansJP-Regular.ttf')
+    const fontBuffer = readFileSync(fontPath)
+    const fontBase64 = fontBuffer.toString('base64')
+    doc.addFileToVFS('NotoSansJP-Regular.ttf', fontBase64)
+    doc.addFont('NotoSansJP-Regular.ttf', 'NotoSansJP', 'normal')
+    doc.setFont('NotoSansJP')
+  } catch (e) {
+    console.warn('NotoSansJP font load failed:', e)
   }
 
   const margin = 15
