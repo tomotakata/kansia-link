@@ -138,10 +138,15 @@ export async function createCompany(
   }
 
   const supabase = await createClient()
-  const { error } = await supabase
-    .from('companies')
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    .insert(parsed.data as unknown as any)
+
+  // Verify session
+  const { data: { user }, error: authError } = await supabase.auth.getUser()
+  if (authError || !user) {
+    return { error: `認証エラー: 再ログインしてください (${authError?.message ?? 'no session'})`, success: false }
+  }
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { error } = await supabase.from('companies').insert(parsed.data as unknown as any)
 
   if (error) {
     console.error('createCompany error:', error)
