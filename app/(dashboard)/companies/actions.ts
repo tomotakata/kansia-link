@@ -137,16 +137,17 @@ export async function createCompany(
     return { error: firstError, success: false }
   }
 
+  // Verify session first
   const supabase = await createClient()
-
-  // Verify session
   const { data: { user }, error: authError } = await supabase.auth.getUser()
   if (authError || !user) {
     return { error: `認証エラー: 再ログインしてください (${authError?.message ?? 'no session'})`, success: false }
   }
 
+  // Use admin client to bypass RLS (auth already verified above)
+  const adminClient = createAdminClient()
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { error } = await supabase.from('companies').insert(parsed.data as unknown as any)
+  const { error } = await adminClient.from('companies').insert(parsed.data as unknown as any)
 
   if (error) {
     console.error('createCompany error:', error)
@@ -204,11 +205,16 @@ export async function updateCompany(
     return { error: firstError, success: false }
   }
 
+  // Verify session first
   const supabase = await createClient()
-  // Cast to bypass strict Supabase generic update type constraint
+  const { data: { user }, error: authError } = await supabase.auth.getUser()
+  if (authError || !user) {
+    return { error: `認証エラー: 再ログインしてください (${authError?.message ?? 'no session'})`, success: false }
+  }
+
+  const adminClient = createAdminClient()
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const db = supabase as any
-  const { error } = await db.from('companies').update(parsed.data).eq('id', id)
+  const { error } = await (adminClient as any).from('companies').update(parsed.data).eq('id', id)
 
   if (error) {
     console.error('updateCompany error:', error)
@@ -225,7 +231,11 @@ export async function updateCompany(
 // ============================================================
 export async function deleteCompany(id: number): Promise<{ error: string | null }> {
   const supabase = await createClient()
-  const { error } = await supabase.from('companies').delete().eq('id', id)
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return { error: '認証エラー: 再ログインしてください' }
+
+  const adminClient = createAdminClient()
+  const { error } = await adminClient.from('companies').delete().eq('id', id)
 
   if (error) {
     console.error('deleteCompany error:', error)
