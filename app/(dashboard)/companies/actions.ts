@@ -111,6 +111,11 @@ export async function createCompany(
     if (ps) payment_schedule = JSON.parse(String(ps))
   } catch { /* ignore */ }
 
+  // Helper: convert empty strings to null for date/nullable fields
+  function nullIfEmpty(v: unknown): string | null {
+    return typeof v === 'string' && v.trim() === '' ? null : (v as string | null)
+  }
+
   const parsed = CompanySchema.safeParse({
     ...raw,
     is_hidden: raw['is_hidden'] === 'true' || raw['is_hidden'] === 'on',
@@ -126,6 +131,9 @@ export async function createCompany(
     payday: raw['payday'] ? parseInt(String(raw['payday'])) : null,
     total_salary: raw['total_salary'] ? parseFloat(String(raw['total_salary'])) : null,
     rep_address_same: raw['rep_address_same'] === 'true' || raw['rep_address_same'] === 'on',
+    // Date fields: empty string → null to avoid PostgreSQL date parse error
+    registered_at: nullIfEmpty(raw['registered_at']),
+    purchase_date: nullIfEmpty(raw['purchase_date']),
     family_members,
     payment_schedule,
   })
@@ -179,6 +187,9 @@ export async function updateCompany(
     if (ps) payment_schedule = JSON.parse(String(ps))
   } catch { /* ignore */ }
 
+  const nullIfEmpty = (v: unknown): string | null =>
+    typeof v === 'string' && v.trim() === '' ? null : (v as string | null)
+
   const parsed = CompanySchema.safeParse({
     ...raw,
     is_hidden: raw['is_hidden'] === 'true' || raw['is_hidden'] === 'on',
@@ -194,6 +205,8 @@ export async function updateCompany(
     payday: raw['payday'] ? parseInt(String(raw['payday'])) : null,
     total_salary: raw['total_salary'] ? parseFloat(String(raw['total_salary'])) : null,
     rep_address_same: raw['rep_address_same'] === 'true' || raw['rep_address_same'] === 'on',
+    registered_at: nullIfEmpty(raw['registered_at']),
+    purchase_date: nullIfEmpty(raw['purchase_date']),
     family_members,
     payment_schedule,
   })
