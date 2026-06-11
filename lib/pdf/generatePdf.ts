@@ -1,4 +1,4 @@
-import type { Company, PaymentScheduleItem, FamilyMember } from '@/types/database'
+import type { Company, PaymentScheduleItem } from '@/types/database'
 import type { Json } from '@/types/database'
 
 function toStr(val: string | null | undefined): string {
@@ -16,296 +16,299 @@ function parseJson<T>(val: Json): T {
 }
 
 /**
- * Generate PDF as base64 string using jsPDF with embedded NotoSansJP font
- * Returns Uint8Array buffer
+ * Generate PDF matching the reference form layout
  */
 export async function generateCompanyPdf(company: Company): Promise<Uint8Array> {
-  // Dynamic import to avoid SSR/bundle issues
   const { jsPDF } = await import('jspdf')
 
-  const doc = new jsPDF({
-    orientation: 'portrait',
-    unit: 'mm',
-    format: 'a4',
-  })
+  const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' })
 
-  // Load and embed NotoSansJP font from filesystem (server-side)
-  // Try multiple paths to support both local dev and Vercel serverless
+  // Load NotoSansJP font
   try {
     const { readFileSync } = await import('fs')
     const { join } = await import('path')
     const cwd = process.cwd()
-    const candidatePaths = [
+    for (const p of [
       join(cwd, 'resources', 'fonts', 'NotoSansJP-Regular.ttf'),
       join(cwd, 'public', 'fonts', 'NotoSansJP-Regular.ttf'),
-    ]
-    let fontBuffer: Buffer | null = null
-    for (const p of candidatePaths) {
-      try { fontBuffer = readFileSync(p); break } catch { /* try next */ }
-    }
-    if (fontBuffer) {
-      const fontBase64 = fontBuffer.toString('base64')
-      doc.addFileToVFS('NotoSansJP-Regular.ttf', fontBase64)
-      doc.addFont('NotoSansJP-Regular.ttf', 'NotoSansJP', 'normal')
-      doc.setFont('NotoSansJP')
-    } else {
-      console.error('NotoSansJP font not found in any candidate path')
+    ]) {
+      try {
+        const buf = readFileSync(p)
+        const b64 = buf.toString('base64')
+        doc.addFileToVFS('NotoSansJP.ttf', b64)
+        doc.addFont('NotoSansJP.ttf', 'NotoSansJP', 'normal')
+        doc.setFont('NotoSansJP')
+        break
+      } catch { /* try next */ }
     }
   } catch (e) {
-    console.warn('NotoSansJP font load failed:', e)
+    console.warn('Font load failed:', e)
   }
 
-  const margin = 15
-  const pageWidth = 210
-  const contentWidth = pageWidth - margin * 2
-  let y = 15
+  // ── Layout constants ──────────────────────────────────────────────────
+  const L = 7    // table left x (mm)
+  const W = 196  // table width
+  const R = L + W // 203
 
-  // --- Helper functions ---
-  function drawLine(yPos: number) {
-    doc.setDrawColor(200, 200, 200)
-    doc.line(margin, yPos, pageWidth - margin, yPos)
+  // ── Drawing helpers ───────────────────────────────────────────────────
+  const setStroke = () => { doc.setDrawColor(0, 0, 0); doc.setLineWidth(0.3) }
+  const lbl = (text: string, x: number, y: number) => {
+    doc.setFontSize(7); doc.setTextColor(80, 80, 80)
+    doc.text(text, x, y)
+  }
+  const val = (text: string, x: number, y: number, maxW?: number) => {
+    doc.setFontSize(9); doc.setTextColor(0, 0, 0)
+    if (maxW) doc.text(text, x, y, { maxWidth: maxW })
+    else doc.text(text, x, y)
+  }
+  const hLine = (x1: number, x2: number, y: number) => {
+    setStroke(); doc.line(x1, y, x2, y)
+  }
+  const vLine = (x: number, y1: number, y2: number) => {
+    setStroke(); doc.line(x, y1, x, y2)
   }
 
-  function drawSectionTitle(title: string, yPos: number): number {
-    doc.setFillColor(60, 90, 153)
-    doc.rect(margin, yPos, contentWidth, 7, 'F')
-    doc.setTextColor(255, 255, 255)
-    doc.setFontSize(10)
-    doc.text(title, margin + 2, yPos + 5)
-    doc.setTextColor(0, 0, 0)
-    return yPos + 9
+  // ── Header (above table) ──────────────────────────────────────────────
+  const updatedAt  = toStr(company.updated_at).slice(0, 10)
+  const registeredAt = toStr(company.registered_at)
+  doc.setFontSize(8); doc.setTextColor(0, 0, 0)
+  doc.text(`更新日  ${updatedAt}    登録日  ${registeredAt}`, R, 10, { align: 'right' })
+
+  // ── Row definitions ───────────────────────────────────────────────────
+  const T = 14  // table top y
+  const rowHeights = [8, 17, 17, 8, 16, 15, 8, 14, 20, 9, 13, 20, 13, 15, 14, 8, 8, 8, 8, 30]
+  let cur = T
+  const ry: number[] = []
+  for (const h of rowHeights) { ry.push(cur); cur += h }
+  const tableBottom = cur
+
+  // Draw outer border
+  setStroke()
+  doc.rect(L, T, W, tableBottom - T)
+
+  // ── Column dividers ───────────────────────────────────────────────────
+  const CD_MAIN   = L + 130  // main right-section divider (rows 1–3)
+  const CD_REP1   = L + 106  // 代表名 / 携帯電話
+  const CD_REP2   = L + 150  // 携帯電話 / 自宅電話
+  const CD_POST1  = L + 57   // 郵便番号 / 都道府県
+  const CD_POST2  = L + 122  // 都道府県 / 区市町村
+  const CD_CAP1   = L + 49   // 資本金 / 月商
+  const CD_CAP2   = L + 98   // 月商 / 従業員数
+  const CD_CAP3   = L + 147  // 従業員数 / 営業年数
+  const CD_BIZ    = L + 56   // 事業内容 右端
+  const CD_PUR1   = L + 107  // 当座口座 / 買取希望額
+  const CD_PUR2   = L + 156  // 買取希望額 / 買取希望日
+  const CD_PAY1   = L + 63   // 入金: 会社名 / 住所
+  const CD_PAY2   = L + 120  // 入金: 住所 / 入金予定額
+  const CD_PAY3   = L + 148  // 入金: 入金予定額 / 取引条件
+  const CD_TAX1   = L + 65   // 税金 / 他社利用
+  const CD_TAX2   = L + 129  // 他社利用 / 備考
+
+  // Row y-positions and heights (non-nullable)
+  const Y = (i: number) => ry[i] as number
+  const H = (i: number) => rowHeights[i] as number
+  const y1=Y(0),y2=Y(1),y3=Y(2),y4=Y(3),y5=Y(4),y6=Y(5),y7=Y(6),y8=Y(7),y9=Y(8)
+  const y10=Y(9),y11=Y(10),y12=Y(11),y13=Y(12),y14=Y(13),y15=Y(14),y16=Y(15)
+  const y17=Y(16),y18=Y(17),y19=Y(18),y20=Y(19)
+  const h1=H(0),h2=H(1),h3=H(2),h4=H(3),h5=H(4),h6=H(5),h7=H(6),h8=H(7),h9=H(8)
+  const h10=H(9),h11=H(10),h12=H(11),h13=H(12),h14=H(13),h15=H(14),h20=H(19)
+
+  // ── Row 1: ※ 評価 | 番号 ─────────────────────────────────────────────
+  hLine(L, R, y1 + h1)
+  vLine(CD_MAIN, y1, y1 + h1)
+  lbl('※', L + 1, y1 + 5)
+  if (company.star_rating) {
+    doc.setFontSize(8); doc.setTextColor(0, 0, 0)
+    doc.text('★'.repeat(company.star_rating), L + 6, y1 + 5)
+  }
+  lbl('番号', CD_MAIN + 1, y1 + 3)
+  val(toNum(company.id), CD_MAIN + 1, y1 + 7)
+
+  // ── Row 2: 会社名 | 会社電話番号 ──────────────────────────────────────
+  hLine(L, R, y2 + h2)
+  vLine(CD_MAIN, y2, y2 + h2)
+  lbl('会社名', L + 1, y2 + 3)
+  val(toStr(company.company_name), L + 1, y2 + 10, 124)
+  lbl('会社電話番号', CD_MAIN + 1, y2 + 3)
+  val(toStr(company.company_phone), CD_MAIN + 1, y2 + 10)
+
+  // ── Row 3: 会社名カナ | 会社FAX ──────────────────────────────────────
+  hLine(L, R, y3 + h3)
+  vLine(CD_MAIN, y3, y3 + h3)
+  lbl('会社名カナ', L + 1, y3 + 3)
+  val(toStr(company.company_name_kana), L + 1, y3 + 10, 124)
+  lbl('会社FAX', CD_MAIN + 1, y3 + 3)
+  val(toStr(company.company_fax), CD_MAIN + 1, y3 + 10)
+
+  // ── Row 4: 和暦 年 月 日 性別 ────────────────────────────────────────
+  hLine(L, R, y4 + h4)
+  {
+    const era    = toStr(company.birth_era)
+    const byear  = toNum(company.birth_year)
+    const bmonth = toNum(company.birth_month)
+    const bday   = toNum(company.birth_day)
+    const gender = toStr(company.gender)
+    let x = L + 1
+    lbl('和暦', x, y4 + 5); x += 9
+    val(era, x, y4 + 5); x += era.length * 2.5 + 3
+    val(byear, x, y4 + 5); x += Math.max(byear.length, 1) * 2.5 + 2
+    lbl('年', x, y4 + 5); x += 6
+    val(bmonth, x, y4 + 5); x += Math.max(bmonth.length, 1) * 2.5 + 2
+    lbl('月', x, y4 + 5); x += 6
+    val(bday, x, y4 + 5); x += Math.max(bday.length, 1) * 2.5 + 2
+    lbl('日', x, y4 + 5); x += 10
+    lbl('性別', x, y4 + 5); x += 9
+    doc.setFontSize(9); doc.setTextColor(0, 0, 0)
+    doc.setFont('NotoSansJP', 'normal')
+    doc.text(gender, x, y4 + 5)
   }
 
-  function drawField(
-    label: string,
-    value: string,
-    x: number,
-    yPos: number,
-    labelWidth: number,
-    cellWidth: number
-  ): number {
-    doc.setFillColor(240, 243, 250)
-    doc.rect(x, yPos, labelWidth, 6, 'F')
-    doc.setDrawColor(200, 200, 200)
-    doc.rect(x, yPos, cellWidth, 6)
-    doc.setFontSize(7)
-    doc.setTextColor(80, 80, 80)
-    doc.text(label, x + 1, yPos + 4)
-    doc.setTextColor(0, 0, 0)
-    doc.setFontSize(8)
-    const valueX = x + labelWidth + 1
-    const maxWidth = cellWidth - labelWidth - 2
-    doc.text(value, valueX, yPos + 4, { maxWidth })
-    return yPos + 7
-  }
+  // ── Row 5: 代表名 | 携帯電話 | 自宅電話 ──────────────────────────────
+  hLine(L, R, y5 + h5)
+  vLine(CD_REP1, y5, y5 + h5)
+  vLine(CD_REP2, y5, y5 + h5)
+  lbl('代表名', L + 1, y5 + 3)
+  val(toStr(company.rep_name), L + 1, y5 + 10, 99)
+  lbl('携帯電話', CD_REP1 + 1, y5 + 3)
+  val(toStr(company.mobile_phone), CD_REP1 + 1, y5 + 10)
+  lbl('自宅電話', CD_REP2 + 1, y5 + 3)
+  val(toStr(company.home_phone), CD_REP2 + 1, y5 + 10)
 
-  // --- Header ---
-  doc.setFillColor(30, 60, 130)
-  doc.rect(0, 0, pageWidth, 12, 'F')
-  doc.setTextColor(255, 255, 255)
-  doc.setFontSize(14)
-  doc.text('顧客詳細情報', margin, 8)
-  doc.setFontSize(8)
-  doc.text(`No. ${company.id}`, pageWidth - margin - 20, 8)
-  y = 16
+  // ── Row 6: 代表名カナ | メールアドレス ───────────────────────────────
+  hLine(L, R, y6 + h6)
+  vLine(CD_REP1, y6, y6 + h6)
+  lbl('代表名カナ', L + 1, y6 + 3)
+  val(toStr(company.rep_name_kana), L + 1, y6 + 10, 99)
+  lbl('メールアドレス', CD_REP1 + 1, y6 + 3)
+  val(toStr(company.email), CD_REP1 + 1, y6 + 10)
 
-  // --- Company Basic Info ---
-  y = drawSectionTitle('会社情報', y)
-  const halfW = contentWidth / 2
+  // ── Row 7: 会社住所 種別 名義 ─────────────────────────────────────────
+  hLine(L, R, y7 + h7)
+  lbl('会社住所', L + 1, y7 + 5)
+  val(toStr(company.company_address_type), L + 18, y7 + 5)
+  lbl('名義', L + 32, y7 + 5)
+  val(toStr(company.company_address_owner), L + 40, y7 + 5)
 
-  // Row 1: 会社名 / 更新日・登録日
-  drawField(
-    '会社名',
-    toStr(company.company_name),
-    margin,
-    y,
-    20,
-    halfW
-  )
-  drawField(
-    '登録日',
-    toStr(company.registered_at),
-    margin + halfW,
-    y,
-    20,
-    halfW
-  )
-  y += 7
+  // ── Row 8: 郵便番号 | 都道府県 | 区市町村 ────────────────────────────
+  hLine(L, R, y8 + h8)
+  vLine(CD_POST1, y8, y8 + h8)
+  vLine(CD_POST2, y8, y8 + h8)
+  lbl('郵便番号', L + 1, y8 + 3)
+  val(toStr(company.company_postal_code), L + 1, y8 + 10)
+  lbl('都道府県', CD_POST1 + 1, y8 + 3)
+  val(toStr(company.company_prefecture), CD_POST1 + 1, y8 + 10)
+  lbl('区市町村', CD_POST2 + 1, y8 + 3)
+  val(toStr(company.company_city), CD_POST2 + 1, y8 + 10)
 
-  // Row 2: 会社名カナ / 更新日
-  drawField(
-    '会社名カナ',
-    toStr(company.company_name_kana),
-    margin,
-    y,
-    20,
-    halfW
-  )
-  drawField(
-    '更新日',
-    toStr(company.updated_at?.slice(0, 10)),
-    margin + halfW,
-    y,
-    20,
-    halfW
-  )
-  y += 7
+  // ── Row 9: 番地 ──────────────────────────────────────────────────────
+  hLine(L, R, y9 + h9)
+  lbl('番地', L + 1, y9 + 3)
+  val(toStr(company.company_street), L + 1, y9 + 10, W - 2)
 
-  // Row 3: 電話 / FAX
-  drawField('会社電話', toStr(company.company_phone), margin, y, 20, halfW)
-  drawField('FAX', toStr(company.company_fax), margin + halfW, y, 20, halfW)
-  y += 7
+  // ── Row 10: 代表住所 種別 名義 ────────────────────────────────────────
+  hLine(L, R, y10 + h10)
+  lbl('代表住所', L + 1, y10 + 6)
+  val(toStr(company.rep_address_type), L + 18, y10 + 6)
+  lbl('名義', L + 32, y10 + 6)
+  val(toStr(company.rep_address_owner), L + 40, y10 + 6)
 
-  // ★ Rating
-  const stars = company.star_rating ? '★'.repeat(company.star_rating) + '☆'.repeat(5 - company.star_rating) : '-'
-  drawField('評価', stars, margin, y, 20, contentWidth)
-  y += 9
+  // ── Row 11: 郵便番号 | 都道府県 | 区市町村 ───────────────────────────
+  hLine(L, R, y11 + h11)
+  vLine(CD_POST1, y11, y11 + h11)
+  vLine(CD_POST2, y11, y11 + h11)
+  lbl('郵便番号', L + 1, y11 + 3)
+  val(toStr(company.rep_postal_code), L + 1, y11 + 10)
+  lbl('都道府県', CD_POST1 + 1, y11 + 3)
+  val(toStr(company.rep_prefecture), CD_POST1 + 1, y11 + 10)
+  lbl('区市町村', CD_POST2 + 1, y11 + 3)
+  val(toStr(company.rep_city), CD_POST2 + 1, y11 + 10)
 
-  // --- Representative Info ---
-  y = drawSectionTitle('代表者情報', y)
+  // ── Row 12: 番地 ─────────────────────────────────────────────────────
+  hLine(L, R, y12 + h12)
+  lbl('番地', L + 1, y12 + 3)
+  val(toStr(company.rep_street), L + 1, y12 + 10, W - 2)
 
-  const birthStr = company.birth_era
-    ? `${company.birth_era}${toNum(company.birth_year)}年${toNum(company.birth_month)}月${toNum(company.birth_day)}日`
-    : ''
-  const w3 = contentWidth / 3
+  // ── Row 13: 資本金 | 月商 | 従業員数 | 営業年数 ──────────────────────
+  hLine(L, R, y13 + h13)
+  vLine(CD_CAP1, y13, y13 + h13)
+  vLine(CD_CAP2, y13, y13 + h13)
+  vLine(CD_CAP3, y13, y13 + h13)
+  lbl('資本金（万円）', L + 1, y13 + 3)
+  val(toNum(company.capital), L + 1, y13 + 10)
+  lbl('月商（万円）', CD_CAP1 + 1, y13 + 3)
+  val(toNum(company.monthly_revenue), CD_CAP1 + 1, y13 + 10)
+  lbl('従業員数（人）', CD_CAP2 + 1, y13 + 3)
+  val(toNum(company.employees), CD_CAP2 + 1, y13 + 10)
+  lbl('営業年数（年）', CD_CAP3 + 1, y13 + 3)
+  val(toNum(company.founded_year), CD_CAP3 + 1, y13 + 10)
 
-  drawField('生年月日', birthStr, margin, y, 20, w3)
-  drawField('性別', toStr(company.gender), margin + w3, y, 15, w3)
-  drawField('代表者名', toStr(company.rep_name), margin + w3 * 2, y, 20, w3)
-  y += 7
-  drawField('代表者名カナ', toStr(company.rep_name_kana), margin, y, 24, halfW)
-  drawField('携帯電話', toStr(company.mobile_phone), margin + halfW, y, 20, halfW)
-  y += 7
-  drawField('自宅電話', toStr(company.home_phone), margin, y, 20, halfW)
-  drawField('メール', toStr(company.email), margin + halfW, y, 20, halfW)
-  y += 9
+  // ── Rows 14+15: 事業内容(tall) | 当座口座/買取 | 給料日/給与 ──────────
+  // 事業内容 spans rows 14+15
+  vLine(CD_BIZ, y14, y15 + h15)
+  // horizontal divider between row14 and row15 (right side only)
+  hLine(CD_BIZ, R, y14 + h14)
+  // row 15 bottom
+  hLine(L, R, y15 + h15)
+  // right-section column dividers
+  vLine(CD_PUR1, y14, y15 + h15)
+  vLine(CD_PUR2, y14, y15 + h15)
 
-  // --- Company Address ---
-  y = drawSectionTitle('会社住所', y)
-  drawField('種別', toStr(company.company_address_type), margin, y, 15, w3)
-  drawField('名義', toStr(company.company_address_owner), margin + w3, y, 15, w3 * 2)
-  y += 7
-  drawField('郵便番号', toStr(company.company_postal_code), margin, y, 20, w3)
-  drawField('都道府県', toStr(company.company_prefecture), margin + w3, y, 20, w3)
-  drawField('市区町村', toStr(company.company_city), margin + w3 * 2, y, 20, w3)
-  y += 7
-  drawField('番地', toStr(company.company_street), margin, y, 15, contentWidth)
-  y += 9
+  lbl('事業内容', L + 1, y14 + 3)
+  val(toStr(company.business_description), L + 1, y14 + 10, CD_BIZ - L - 2)
 
-  // --- Representative Address ---
-  y = drawSectionTitle('代表住所', y)
-  if (company.rep_address_same) {
-    doc.setFontSize(8)
-    doc.text('（会社住所と同じ）', margin + 2, y + 4)
-    y += 9
-  } else {
-    drawField('種別', toStr(company.rep_address_type), margin, y, 15, w3)
-    drawField('名義', toStr(company.rep_address_owner), margin + w3, y, 15, w3 * 2)
-    y += 7
-    drawField('郵便番号', toStr(company.rep_postal_code), margin, y, 20, w3)
-    drawField('都道府県', toStr(company.rep_prefecture), margin + w3, y, 20, w3)
-    drawField('市区町村', toStr(company.rep_city), margin + w3 * 2, y, 20, w3)
-    y += 7
-    drawField('番地', toStr(company.rep_street), margin, y, 15, contentWidth)
-    y += 9
-  }
+  lbl('当座口座', CD_BIZ + 1, y14 + 3)
+  val(toStr(company.current_account), CD_BIZ + 1, y14 + 10)
+  lbl('買取希望額', CD_PUR1 + 1, y14 + 3)
+  val(company.purchase_amount != null ? `${company.purchase_amount}万円` : '', CD_PUR1 + 1, y14 + 10)
+  lbl('買取希望日', CD_PUR2 + 1, y14 + 3)
+  val(toStr(company.purchase_date), CD_PUR2 + 1, y14 + 10)
 
-  // --- Business Metrics ---
-  y = drawSectionTitle('事業情報', y)
-  const w4 = contentWidth / 4
-  drawField('資本金', company.capital != null ? `${company.capital}万円` : '', margin, y, 18, w4)
-  drawField('月商', company.monthly_revenue != null ? `${company.monthly_revenue}万円` : '', margin + w4, y, 15, w4)
-  drawField('従業員数', company.employees != null ? `${company.employees}人` : '', margin + w4 * 2, y, 20, w4)
-  drawField('設立年', company.founded_year != null ? `${company.founded_year}年` : '', margin + w4 * 3, y, 18, w4)
-  y += 7
-  drawField('買取希望額', company.purchase_amount != null ? `${company.purchase_amount}万円` : '', margin, y, 22, halfW)
-  drawField('買取希望日', toStr(company.purchase_date), margin + halfW, y, 22, halfW)
-  y += 7
-  drawField('給料日', company.payday != null ? `${company.payday}日` : '', margin, y, 18, w3)
-  drawField('給与総支給額', company.total_salary != null ? `${company.total_salary}万円` : '', margin + w3, y, 24, w3)
-  drawField('当座口座', toStr(company.current_account), margin + w3 * 2, y, 20, w3)
-  y += 7
-  if (company.business_description) {
-    drawField('事業内容', toStr(company.business_description), margin, y, 20, contentWidth)
-    y += 7
-  }
-  y += 2
+  lbl('給料日', CD_PUR1 + 1, y15 + 3)
+  val(company.payday != null ? `${company.payday}日` : '', CD_PUR1 + 1, y15 + 10)
+  lbl('給与総支給額', CD_PUR2 + 1, y15 + 3)
+  val(company.total_salary != null ? `${company.total_salary}万円` : '', CD_PUR2 + 1, y15 + 10)
 
-  // --- Payment Schedule ---
+  // ── Rows 16–19: 入金予定テーブル ─────────────────────────────────────
+  hLine(L, R, y16 + H(15))
+  vLine(CD_PAY1, y16, y19 + H(18))
+  vLine(CD_PAY2, y16, y19 + H(18))
+  vLine(CD_PAY3, y16, y19 + H(18))
+
+  // header
+  lbl('会社名',   L + 1,       y16 + 5)
+  lbl('住所',     CD_PAY1 + 1, y16 + 5)
+  lbl('入金予定額', CD_PAY2 + 1, y16 + 5)
+  lbl('取引条件', CD_PAY3 + 1, y16 + 5)
+
+  // data rows
   const payments = parseJson<PaymentScheduleItem[]>(company.payment_schedule)
-  if (payments.length > 0) {
-    y = drawSectionTitle('入金予定', y)
-    const colWidths = [35, 40, 25, 30, 30]
-    const headers = ['会社名', '住所', '入金予定額', '条件1', '条件2']
+  ;([y17, y18, y19] as number[]).forEach((rowY, i) => {
+    hLine(L, R, rowY + H(16))
+    const p = payments[i]
+    if (p) {
+      val(toStr(p.company),    L + 1,       rowY + 6, 55)
+      val(toStr(p.address),    CD_PAY1 + 1, rowY + 6, 51)
+      val(toStr(p.amount),     CD_PAY2 + 1, rowY + 6, 23)
+      val(toStr(p.condition1), CD_PAY3 + 1, rowY + 6, 44)
+    }
+  })
 
-    // Header row
-    let xPos = margin
-    colWidths.forEach((w, i) => {
-      doc.setFillColor(200, 210, 230)
-      doc.rect(xPos, y, w, 6, 'F')
-      doc.setDrawColor(180, 180, 180)
-      doc.rect(xPos, y, w, 6)
-      doc.setFontSize(7)
-      doc.setTextColor(40, 40, 40)
-      doc.text(headers[i] ?? '', xPos + 1, y + 4)
-      xPos += w
-    })
-    y += 6
+  // ── Row 20: 税金 | 他社利用状況 | 備考 ──────────────────────────────
+  vLine(CD_TAX1, y20, y20 + h20)
+  vLine(CD_TAX2, y20, y20 + h20)
 
-    payments.forEach((p) => {
-      xPos = margin
-      const rowData = [p.company, p.address, p.amount, p.condition1, p.condition2]
-      colWidths.forEach((w, i) => {
-        doc.setFillColor(255, 255, 255)
-        doc.rect(xPos, y, w, 6, 'F')
-        doc.setDrawColor(200, 200, 200)
-        doc.rect(xPos, y, w, 6)
-        doc.setFontSize(7)
-        doc.setTextColor(0, 0, 0)
-        doc.text(rowData[i] ?? '', xPos + 1, y + 4, { maxWidth: w - 2 })
-        xPos += w
-      })
-      y += 6
-    })
-    y += 3
-  }
-
-  // --- Tax & Others ---
-  y = drawSectionTitle('税金・その他', y)
-  drawField('税金納付状況', toStr(company.tax_payment_status), margin, y, 24, halfW)
-  drawField('他社利用状況', toStr(company.other_companies), margin + halfW, y, 24, halfW)
-  y += 7
+  lbl('税金納付状況', L + 1, y20 + 3)
+  val(toStr(company.tax_payment_status), L + 1, y20 + 10)
   if (company.tax_payment_detail) {
-    drawField('未納詳細', toStr(company.tax_payment_detail), margin, y, 20, contentWidth)
-    y += 7
-  }
-  if (company.notes) {
-    drawField('備考', toStr(company.notes), margin, y, 15, contentWidth)
-    y += 7
+    doc.setFontSize(8); doc.setTextColor(0, 0, 0)
+    doc.text(toStr(company.tax_payment_detail), L + 1, y20 + 16, { maxWidth: 57 })
   }
 
-  // --- Family Members ---
-  const family = parseJson<FamilyMember[]>(company.family_members)
-  const validFamily = family.filter((f) => f.name)
-  if (validFamily.length > 0) {
-    y = drawSectionTitle('家族構成', y)
-    validFamily.forEach((f) => {
-      drawField('氏名', f.name, margin, y, 15, w3)
-      drawField('続柄', f.relation, margin + w3, y, 15, w3)
-      drawField('備考', f.note, margin + w3 * 2, y, 15, w3)
-      y += 7
-    })
-  }
+  lbl('他社利用状況', CD_TAX1 + 1, y20 + 3)
+  val(toStr(company.other_companies), CD_TAX1 + 1, y20 + 10, 58)
 
-  // --- Footer ---
-  drawLine(y + 2)
-  doc.setFontSize(7)
-  doc.setTextColor(120, 120, 120)
-  doc.text(
-    `カンシアリンク  |  出力日: ${new Date().toLocaleDateString('ja-JP')}  |  ID: ${company.id}`,
-    margin,
-    y + 6
-  )
+  lbl('備考', CD_TAX2 + 1, y20 + 3)
+  val(toStr(company.notes), CD_TAX2 + 1, y20 + 10, 64)
 
   return doc.output('arraybuffer') as unknown as Uint8Array
 }
