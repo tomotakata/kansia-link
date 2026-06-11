@@ -8,7 +8,7 @@ import { CompanySchema, type CompanyFormData } from '@/lib/validations/company'
 import { createCompany, updateCompany } from '@/app/(dashboard)/companies/actions'
 import ErrorMessage from '@/components/ui/ErrorMessage'
 import LoadingSpinner from '@/components/ui/LoadingSpinner'
-import type { Company, FamilyMember, PaymentScheduleItem, Json } from '@/types/database'
+import type { Company, PaymentScheduleItem, Json } from '@/types/database'
 
 const PREFECTURES = [
   '北海道', '青森県', '岩手県', '宮城県', '秋田県', '山形県', '福島県',
@@ -19,11 +19,6 @@ const PREFECTURES = [
   '徳島県', '香川県', '愛媛県', '高知県', '福岡県', '佐賀県', '長崎県',
   '熊本県', '大分県', '宮崎県', '鹿児島県', '沖縄県',
 ]
-
-function parseFamily(val: Json): FamilyMember[] {
-  if (Array.isArray(val)) return val as unknown as FamilyMember[]
-  return [{ name: '', relation: '', note: '' }, { name: '', relation: '', note: '' }, { name: '', relation: '', note: '' }, { name: '', relation: '', note: '' }]
-}
 
 function parsePayment(val: Json): PaymentScheduleItem[] {
   if (Array.isArray(val)) return val as unknown as PaymentScheduleItem[]
@@ -59,7 +54,6 @@ export default function CompanyForm({ company }: CompanyFormProps) {
     mobile_phone: company?.mobile_phone ?? '',
     home_phone: company?.home_phone ?? '',
     email: company?.email ?? '',
-    family_members: parseFamily(company?.family_members ?? []),
     company_address_type: (company?.company_address_type as '賃貸' | '所有') ?? null,
     company_address_owner: company?.company_address_owner ?? '',
     company_postal_code: company?.company_postal_code ?? '',
@@ -140,7 +134,7 @@ export default function CompanyForm({ company }: CompanyFormProps) {
     const fd = new FormData()
     Object.entries(data).forEach(([k, v]) => {
       if (v == null) return
-      if (k === 'family_members' || k === 'payment_schedule') {
+      if (k === 'payment_schedule') {
         fd.append(k, JSON.stringify(v))
       } else {
         fd.append(k, String(v))
@@ -322,32 +316,6 @@ export default function CompanyForm({ company }: CompanyFormProps) {
             <input id="email" type="email" {...register('email')} className="form-input" placeholder="メールアドレス" />
             <ErrorMessage message={errors.email?.message} />
           </div>
-        </div>
-      </div>
-
-      {/* Family Members */}
-      <div className="section-card">
-        <p className="section-title">家族構成</p>
-        <div className="space-y-2">
-          {[0, 1, 2, 3].map((i) => (
-            <div key={i} className="grid grid-cols-3 gap-2">
-              <input
-                {...register(`family_members.${i}.name`)}
-                className="form-input"
-                placeholder={`家族(${i + 1}) 氏名`}
-              />
-              <input
-                {...register(`family_members.${i}.relation`)}
-                className="form-input"
-                placeholder={`家族(${i + 1}) 続柄`}
-              />
-              <input
-                {...register(`family_members.${i}.note`)}
-                className="form-input"
-                placeholder={`家族(${i + 1}) 備考`}
-              />
-            </div>
-          ))}
         </div>
       </div>
 

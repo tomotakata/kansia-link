@@ -1,11 +1,5 @@
 import { z } from 'zod'
 
-const FamilyMemberSchema = z.object({
-  name: z.string().max(100).default(''),
-  relation: z.string().max(50).default(''),
-  note: z.string().max(200).default(''),
-})
-
 const PaymentScheduleSchema = z.object({
   company: z.string().max(200).default(''),
   address: z.string().max(300).default(''),
@@ -61,7 +55,6 @@ export const CompanySchema = z.object({
     .nullable()
     .optional()
     .or(z.literal('')),
-  family_members: z.array(FamilyMemberSchema).max(4).default([]),
   company_address_type: z.enum(['賃貸', '所有']).nullable().optional(),
   company_address_owner: z.string().max(100).nullable().optional(),
   company_postal_code: z

@@ -51,9 +51,9 @@ export async function generateCompanyPdf(company: Company): Promise<Uint8Array> 
   const R = L + W // 203
 
   // ── Drawing helpers ───────────────────────────────────────────────────
-  const setStroke = () => { doc.setDrawColor(0, 0, 0); doc.setLineWidth(0.3) }
+  const setStroke = () => { doc.setDrawColor(30, 80, 160); doc.setLineWidth(0.3) }
   const lbl = (text: string, x: number, y: number) => {
-    doc.setFontSize(7); doc.setTextColor(80, 80, 80)
+    doc.setFontSize(7); doc.setTextColor(30, 80, 160)
     doc.text(text, x, y)
   }
   const val = (text: string, x: number, y: number, maxW?: number) => {
@@ -71,7 +71,7 @@ export async function generateCompanyPdf(company: Company): Promise<Uint8Array> 
   // ── Header (above table) ──────────────────────────────────────────────
   const updatedAt  = toStr(company.updated_at).slice(0, 10)
   const registeredAt = toStr(company.registered_at)
-  doc.setFontSize(8); doc.setTextColor(0, 0, 0)
+  doc.setFontSize(8); doc.setTextColor(30, 80, 160)
   doc.text(`更新日  ${updatedAt}    登録日  ${registeredAt}`, R, 10, { align: 'right' })
 
   // ── Row definitions ───────────────────────────────────────────────────
@@ -83,7 +83,8 @@ export async function generateCompanyPdf(company: Company): Promise<Uint8Array> 
   const tableBottom = cur
 
   // Draw outer border
-  setStroke()
+  doc.setDrawColor(30, 80, 160)
+  doc.setLineWidth(0.3)
   doc.rect(L, T, W, tableBottom - T)
 
   // ── Column dividers ───────────────────────────────────────────────────
