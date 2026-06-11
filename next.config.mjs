@@ -21,9 +21,9 @@ const nextConfig = {
     serverActions: {
       allowedOrigins: ['localhost:3000', 'kansia-link.vercel.app'],
     },
-    // Include font file in serverless function bundle for PDF generation
+    // Include font file + proposal HTML in serverless function bundle
     outputFileTracingIncludes: {
-      '**': ['./resources/fonts/**'],
+      '**': ['./resources/fonts/**', './public/infra-proposal.html'],
     },
   },
 }

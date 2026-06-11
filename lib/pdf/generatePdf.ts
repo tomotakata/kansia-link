@@ -197,11 +197,12 @@ export async function generateCompanyPdf(company: Company): Promise<Uint8Array> 
     const gender = toStr(company.gender)
     let x = L + 1
     lbl('和暦', x, Y(3) + 5); x += 9
-    val(era, x, Y(3) + 5); x += era.length * 2.5 + 5
+    val(era, x, Y(3) + 5); x += Math.max(era.length, 1) * 2.5 + 4
+    val(byear, x, Y(3) + 5); x += Math.max(byear.length, 1) * 2.5 + 2
     lbl('年', x, Y(3) + 5); x += 6
-    val(byear, x, Y(3) + 5); x += Math.max(byear.length, 1) * 2.5 + 5
+    val(bmonth, x, Y(3) + 5); x += Math.max(bmonth.length, 1) * 2.5 + 2
     lbl('月', x, Y(3) + 5); x += 6
-    val(bmonth, x, Y(3) + 5); x += Math.max(bmonth.length, 1) * 2.5 + 5
+    val(bday, x, Y(3) + 5); x += Math.max(bday.length, 1) * 2.5 + 2
     lbl('日', x, Y(3) + 5); x += 10
     lbl('性別', x, Y(3) + 5); x += 9
     doc.setFontSize(9); doc.setTextColor(0, 0, 0)
