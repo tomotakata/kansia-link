@@ -19,7 +19,11 @@ const nextConfig = {
   },
   experimental: {
     serverActions: {
-      allowedOrigins: ['localhost:3000', 'kansia-link.vercel.app'],
+      allowedOrigins: [
+        'localhost:3000',
+        'kansia-link.vercel.app',
+        'admin.kanshia.com',
+      ],
     },
     // Include font file + proposal HTML in serverless function bundle
     outputFileTracingIncludes: {
