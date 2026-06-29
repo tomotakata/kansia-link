@@ -35,11 +35,16 @@ export async function GET(_request: Request, { params }: RouteParams) {
     const pdfBuffer = await generateCompanyPdf(company)
     const buffer = Buffer.from(pdfBuffer as unknown as ArrayBuffer)
 
+    // Use company name as the download filename (sanitized), fallback to id
+    const rawName = ((company as { company_name?: string | null }).company_name ?? '').trim().replace(/[\\/:*?"<>|]/g, '_')
+    const baseName = rawName.length > 0 ? rawName : `顧客詳細_${id}`
+    const encodedName = encodeURIComponent(`${baseName}.pdf`)
+
     return new NextResponse(buffer, {
       status: 200,
       headers: {
         'Content-Type': 'application/pdf',
-        'Content-Disposition': `attachment; filename*=UTF-8''%E9%A1%A7%E5%AE%A2%E8%A9%B3%E7%B4%B0_${id}.pdf`,
+        'Content-Disposition': `attachment; filename="company_${id}.pdf"; filename*=UTF-8''${encodedName}`,
         'Cache-Control': 'no-store',
       },
     })
