@@ -117,6 +117,7 @@ export default function CompanyForm({ company }: CompanyFormProps) {
   }, [repAddressSame, companyPrefecture, companyCity, companyStreet, companyPostalCode, companyAddressOwner, companyAddressType, setValue])
 
   // Postal code -> address auto lookup (zipcloud API, no key / CORS enabled)
+  const [invalidMsg, setInvalidMsg] = useState<string | null>(null)
   const [zipStatus, setZipStatus] = useState<{
     company: 'idle' | 'loading' | 'notfound'
     rep: 'idle' | 'loading' | 'notfound'
@@ -237,6 +238,7 @@ export default function CompanyForm({ company }: CompanyFormProps) {
   const [serverState, formAction] = useFormState(boundAction, { error: null, success: false })
 
   async function onSubmit(data: CompanyFormData): Promise<void> {
+    setInvalidMsg(null)
     const fd = new FormData()
     Object.entries(data).forEach(([k, v]) => {
       if (v == null) return
@@ -249,8 +251,20 @@ export default function CompanyForm({ company }: CompanyFormProps) {
     await formAction(fd)
   }
 
+  // Surface validation failures so the submit button never "does nothing"
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  function onInvalid(errs: any): void {
+    const first = errs ? Object.keys(errs)[0] : undefined
+    setInvalidMsg('未入力または形式に誤りのある項目があります。赤字の項目をご確認ください。')
+    if (first) {
+      const el = document.querySelector(`[name="${first}"]`) as HTMLElement | null
+      el?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+      el?.focus?.()
+    }
+  }
+
   return (
-    <form onSubmit={handleSubmit(onSubmit)} noValidate>
+    <form onSubmit={handleSubmit(onSubmit, onInvalid)} noValidate>
       {/* Header row */}
       <div className="flex items-center justify-between mb-4">
         <label className="flex items-center gap-2 text-sm cursor-pointer">
@@ -272,9 +286,9 @@ export default function CompanyForm({ company }: CompanyFormProps) {
         </div>
       </div>
 
-      {serverState.error && (
+      {(serverState.error || invalidMsg) && (
         <div role="alert" className="bg-red-50 border border-red-200 text-red-700 p-3 rounded mb-4 text-sm">
-          {serverState.error}
+          {serverState.error || invalidMsg}
         </div>
       )}
 

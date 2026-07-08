@@ -1,5 +1,16 @@
 import { z } from 'zod'
 
+// Full-width (zenkaku) -> half-width (hankaku) for numbers/symbols/space.
+// Desktop IME often leaves phone/postal input in full-width, which would fail
+// the half-width regex below. Normalize before validation.
+const toHalfWidth = (s: string) =>
+  s
+    .replace(/[！-～]/g, (ch) => String.fromCharCode(ch.charCodeAt(0) - 0xfee0))
+    .replace(/\u3000/g, ' ')
+
+const normStr = <T extends z.ZodTypeAny>(schema: T) =>
+  z.preprocess((v) => (typeof v === 'string' ? toHalfWidth(v).trim() : v), schema)
+
 const PaymentScheduleSchema = z.object({
   company: z.string().max(200).default(''),
   address: z.string().max(300).default(''),
@@ -14,20 +25,24 @@ export const CompanySchema = z.object({
   star_rating: z.number().int().min(1).max(5).nullable().optional(),
   company_name: z.string().min(1, '会社名は必須です').max(200),
   company_name_kana: z.string().max(200).nullable().optional(),
-  company_phone: z
-    .string()
-    .max(20)
-    .regex(/^[0-9\-+() ]*$/, '電話番号の形式が正しくありません')
-    .nullable()
-    .optional()
-    .or(z.literal('')),
-  company_fax: z
-    .string()
-    .max(20)
-    .regex(/^[0-9\-+() ]*$/, 'FAX番号の形式が正しくありません')
-    .nullable()
-    .optional()
-    .or(z.literal('')),
+  company_phone: normStr(
+    z
+      .string()
+      .max(20)
+      .regex(/^[0-9\-+() ]*$/, '電話番号の形式が正しくありません')
+      .nullable()
+      .optional()
+      .or(z.literal(''))
+  ),
+  company_fax: normStr(
+    z
+      .string()
+      .max(20)
+      .regex(/^[0-9\-+() ]*$/, 'FAX番号の形式が正しくありません')
+      .nullable()
+      .optional()
+      .or(z.literal(''))
+  ),
   birth_era: z.enum(['西暦', 'S', 'H']).nullable().optional(),
   birth_year: z.number().int().min(1800).max(2100).nullable().optional(),
   birth_month: z.number().int().min(1).max(12).nullable().optional(),
@@ -35,48 +50,58 @@ export const CompanySchema = z.object({
   gender: z.enum(['男性', '女性']).nullable().optional(),
   rep_name: z.string().max(100).nullable().optional(),
   rep_name_kana: z.string().max(100).nullable().optional(),
-  mobile_phone: z
-    .string()
-    .max(20)
-    .regex(/^[0-9\-+() ]*$/, '携帯番号の形式が正しくありません')
-    .nullable()
-    .optional()
-    .or(z.literal('')),
-  home_phone: z
-    .string()
-    .max(20)
-    .regex(/^[0-9\-+() ]*$/, '電話番号の形式が正しくありません')
-    .nullable()
-    .optional()
-    .or(z.literal('')),
-  email: z
-    .string()
-    .email('メールアドレスの形式が正しくありません')
-    .nullable()
-    .optional()
-    .or(z.literal('')),
+  mobile_phone: normStr(
+    z
+      .string()
+      .max(20)
+      .regex(/^[0-9\-+() ]*$/, '携帯番号の形式が正しくありません')
+      .nullable()
+      .optional()
+      .or(z.literal(''))
+  ),
+  home_phone: normStr(
+    z
+      .string()
+      .max(20)
+      .regex(/^[0-9\-+() ]*$/, '電話番号の形式が正しくありません')
+      .nullable()
+      .optional()
+      .or(z.literal(''))
+  ),
+  email: normStr(
+    z
+      .string()
+      .email('メールアドレスの形式が正しくありません')
+      .nullable()
+      .optional()
+      .or(z.literal(''))
+  ),
   company_address_type: z.enum(['賃貸', '所有']).nullable().optional(),
   company_address_owner: z.string().max(100).nullable().optional(),
-  company_postal_code: z
-    .string()
-    .max(8)
-    .regex(/^[0-9\-]*$/, '郵便番号の形式が正しくありません')
-    .nullable()
-    .optional()
-    .or(z.literal('')),
+  company_postal_code: normStr(
+    z
+      .string()
+      .max(8)
+      .regex(/^[0-9\-]*$/, '郵便番号の形式が正しくありません')
+      .nullable()
+      .optional()
+      .or(z.literal(''))
+  ),
   company_prefecture: z.string().max(10).nullable().optional(),
   company_city: z.string().max(100).nullable().optional(),
   company_street: z.string().max(300).nullable().optional(),
   rep_address_same: z.boolean().default(false),
   rep_address_type: z.enum(['賃貸', '所有']).nullable().optional(),
   rep_address_owner: z.string().max(100).nullable().optional(),
-  rep_postal_code: z
-    .string()
-    .max(8)
-    .regex(/^[0-9\-]*$/, '郵便番号の形式が正しくありません')
-    .nullable()
-    .optional()
-    .or(z.literal('')),
+  rep_postal_code: normStr(
+    z
+      .string()
+      .max(8)
+      .regex(/^[0-9\-]*$/, '郵便番号の形式が正しくありません')
+      .nullable()
+      .optional()
+      .or(z.literal(''))
+  ),
   rep_prefecture: z.string().max(10).nullable().optional(),
   rep_city: z.string().max(100).nullable().optional(),
   rep_street: z.string().max(300).nullable().optional(),
