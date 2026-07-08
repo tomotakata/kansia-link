@@ -1,7 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { useFormState } from 'react-dom'
+import { useRouter } from 'next/navigation'
 import { useForm, Controller } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { CompanySchema, type CompanyFormData } from '@/lib/validations/company'
@@ -98,6 +98,11 @@ export default function CompanyForm({ company }: CompanyFormProps) {
   })
 
   const repAddressSame = watch('rep_address_same')
+  const router = useRouter()
+  const [serverState, setServerState] = useState<{ error: string | null; success: boolean }>({
+    error: null,
+    success: false,
+  })
   const companyPrefecture = watch('company_prefecture')
   const companyCity = watch('company_city')
   const companyStreet = watch('company_street')
@@ -223,22 +228,9 @@ export default function CompanyForm({ company }: CompanyFormProps) {
   )
 
 
-  // Build the bound action for useFormState
-  const boundAction = useCallback(
-    (state: { error: string | null; success: boolean }, fd: FormData) => {
-      if (isEdit && company) {
-        return updateCompany(company.id, state, fd)
-      }
-      return createCompany(state, fd)
-    },
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [isEdit, company?.id]
-  )
-
-  const [serverState, formAction] = useFormState(boundAction, { error: null, success: false })
-
   async function onSubmit(data: CompanyFormData): Promise<void> {
     setInvalidMsg(null)
+    setServerState({ error: null, success: false })
     const fd = new FormData()
     Object.entries(data).forEach(([k, v]) => {
       if (v == null) return
@@ -248,7 +240,23 @@ export default function CompanyForm({ company }: CompanyFormProps) {
         fd.append(k, String(v))
       }
     })
-    await formAction(fd)
+    try {
+      const result = isEdit && company
+        ? await updateCompany(company.id, { error: null, success: false }, fd)
+        : await createCompany({ error: null, success: false }, fd)
+      if (result?.error) {
+        setServerState({ error: result.error, success: false })
+        return
+      }
+      // Success: navigate client-side (avoids server redirect being swallowed by RHF)
+      router.push('/companies')
+      router.refresh()
+    } catch (e) {
+      setServerState({
+        error: `送信中にエラーが発生しました: ${e instanceof Error ? e.message : String(e)}`,
+        success: false,
+      })
+    }
   }
 
   // Surface validation failures so the submit button never "does nothing"

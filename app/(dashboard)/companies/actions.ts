@@ -1,7 +1,6 @@
 'use server'
 
 import { revalidatePath } from 'next/cache'
-import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { CompanySchema } from '@/lib/validations/company'
@@ -163,7 +162,7 @@ export async function createCompany(
   }
 
   revalidatePath('/companies')
-  redirect('/companies')
+  return { error: null, success: true }
 }
 
 // ============================================================
@@ -236,7 +235,7 @@ export async function updateCompany(
 
   revalidatePath('/companies')
   revalidatePath(`/companies/${id}/edit`)
-  redirect('/companies')
+  return { error: null, success: true }
 }
 
 // ============================================================
