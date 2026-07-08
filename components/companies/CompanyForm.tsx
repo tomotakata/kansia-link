@@ -161,6 +161,46 @@ export default function CompanyForm({ company }: CompanyFormProps) {
   const companyZipReg = register('company_postal_code')
   const repZipReg = register('rep_postal_code')
 
+  // Company/Rep name -> katakana auto input (vanilla-autokana captures IME reading)
+  useEffect(() => {
+    let disposed = false
+    let timer: ReturnType<typeof setInterval> | undefined
+    void (async () => {
+      const AutoKana = await import('vanilla-autokana')
+      if (disposed) return
+      const hasName = document.getElementById('company_name')
+      const hasRep = document.getElementById('rep_name')
+      const akCompany = hasName
+        ? AutoKana.bind('#company_name', '#company_name_kana', { katakana: true })
+        : null
+      const akRep = hasRep
+        ? AutoKana.bind('#rep_name', '#rep_name_kana', { katakana: true })
+        : null
+      let lastCompany = ''
+      let lastRep = ''
+      timer = setInterval(() => {
+        if (akCompany) {
+          const v = akCompany.getFurigana()
+          if (v && v !== lastCompany) {
+            lastCompany = v
+            setValue('company_name_kana', v, { shouldValidate: false })
+          }
+        }
+        if (akRep) {
+          const v = akRep.getFurigana()
+          if (v && v !== lastRep) {
+            lastRep = v
+            setValue('rep_name_kana', v, { shouldValidate: false })
+          }
+        }
+      }, 150)
+    })()
+    return () => {
+      disposed = true
+      if (timer) clearInterval(timer)
+    }
+  }, [setValue])
+
 
   // Build the bound action for useFormState
   const boundAction = useCallback(
