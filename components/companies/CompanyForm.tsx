@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { useFormState } from 'react-dom'
 import { useForm, Controller } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
@@ -161,45 +161,48 @@ export default function CompanyForm({ company }: CompanyFormProps) {
   const companyZipReg = register('company_postal_code')
   const repZipReg = register('rep_postal_code')
 
-  // Company/Rep name -> katakana auto input (vanilla-autokana captures IME reading)
-  useEffect(() => {
-    let disposed = false
-    let timer: ReturnType<typeof setInterval> | undefined
-    void (async () => {
-      const AutoKana = await import('vanilla-autokana')
-      if (disposed) return
-      const hasName = document.getElementById('company_name')
-      const hasRep = document.getElementById('rep_name')
-      const akCompany = hasName
-        ? AutoKana.bind('#company_name', '#company_name_kana', { katakana: true })
-        : null
-      const akRep = hasRep
-        ? AutoKana.bind('#rep_name', '#rep_name_kana', { katakana: true })
-        : null
-      let lastCompany = ''
-      let lastRep = ''
-      timer = setInterval(() => {
-        if (akCompany) {
-          const v = akCompany.getFurigana()
-          if (v && v !== lastCompany) {
-            lastCompany = v
-            setValue('company_name_kana', v, { shouldValidate: false })
-          }
+  // Company/Rep name -> katakana auto input (capture IME reading via composition events)
+  const kanaAccum = useRef<{ company: string; rep: string }>({ company: '', rep: '' })
+  const kanaPending = useRef<{ company: string; rep: string }>({ company: '', rep: '' })
+
+  const toKatakana = (s: string) =>
+    s.replace(/[\u3041-\u3096]/g, (c) => String.fromCharCode(c.charCodeAt(0) + 0x60))
+  const isReading = (s: string) => s.length > 0 && /^[\u3041-\u309Fー\u30fc]+$/.test(s)
+
+  const handleNameComposition = useCallback(
+    (
+      target: 'company' | 'rep',
+      phase: 'update' | 'end',
+      data: string
+    ) => {
+      const kanaField = target === 'company' ? 'company_name_kana' : 'rep_name_kana'
+      if (phase === 'update') {
+        if (isReading(data)) kanaPending.current[target] = data
+      } else {
+        const reading = kanaPending.current[target]
+        if (reading) {
+          kanaAccum.current[target] += toKatakana(reading)
+          setValue(kanaField, kanaAccum.current[target], { shouldValidate: false })
         }
-        if (akRep) {
-          const v = akRep.getFurigana()
-          if (v && v !== lastRep) {
-            lastRep = v
-            setValue('rep_name_kana', v, { shouldValidate: false })
-          }
-        }
-      }, 150)
-    })()
-    return () => {
-      disposed = true
-      if (timer) clearInterval(timer)
-    }
-  }, [setValue])
+        kanaPending.current[target] = ''
+      }
+    },
+    [setValue]
+  )
+
+  const handleNameInput = useCallback(
+    (target: 'company' | 'rep', value: string) => {
+      // Reset kana when the name field is cleared
+      if (value.length === 0) {
+        kanaAccum.current[target] = ''
+        kanaPending.current[target] = ''
+        setValue(target === 'company' ? 'company_name_kana' : 'rep_name_kana', '', {
+          shouldValidate: false,
+        })
+      }
+    },
+    [setValue]
+  )
 
 
   // Build the bound action for useFormState
@@ -288,7 +291,20 @@ export default function CompanyForm({ company }: CompanyFormProps) {
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div className="md:col-span-2">
             <label htmlFor="company_name" className="form-label">会社名 <span className="text-red-500">*</span></label>
-            <input id="company_name" {...register('company_name')} className="form-input" placeholder="会社名" />
+            <input
+              id="company_name"
+              {...register('company_name', {
+                onChange: (e) => handleNameInput('company', e.target.value),
+              })}
+              onCompositionUpdate={(e) =>
+                handleNameComposition('company', 'update', e.data)
+              }
+              onCompositionEnd={(e) =>
+                handleNameComposition('company', 'end', e.data)
+              }
+              className="form-input"
+              placeholder="会社名"
+            />
             <ErrorMessage message={errors.company_name?.message} />
           </div>
           <div className="md:col-span-2">
@@ -381,7 +397,16 @@ export default function CompanyForm({ company }: CompanyFormProps) {
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           <div>
             <label htmlFor="rep_name" className="form-label">代表者名</label>
-            <input id="rep_name" {...register('rep_name')} className="form-input" placeholder="代表者名" />
+            <input
+              id="rep_name"
+              {...register('rep_name', {
+                onChange: (e) => handleNameInput('rep', e.target.value),
+              })}
+              onCompositionUpdate={(e) => handleNameComposition('rep', 'update', e.data)}
+              onCompositionEnd={(e) => handleNameComposition('rep', 'end', e.data)}
+              className="form-input"
+              placeholder="代表者名"
+            />
           </div>
           <div>
             <label htmlFor="mobile_phone" className="form-label">携帯番号</label>
