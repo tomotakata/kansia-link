@@ -262,8 +262,33 @@ export default function CompanyForm({ company }: CompanyFormProps) {
   // Surface validation failures so the submit button never "does nothing"
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   function onInvalid(errs: any): void {
-    const first = errs ? Object.keys(errs)[0] : undefined
-    setInvalidMsg('未入力または形式に誤りのある項目があります。赤字の項目をご確認ください。')
+    const labels: Record<string, string> = {
+      star_rating: '評価', company_name: '会社名', company_name_kana: '会社名カナ',
+      company_phone: '会社電話番号', company_fax: 'FAX番号', birth_era: '生年(元号)',
+      birth_year: '生年', birth_month: '生月', birth_day: '生日', gender: '性別',
+      rep_name: '代表者名', rep_name_kana: '代表者名カナ', mobile_phone: '携帯番号',
+      home_phone: '自宅電話番号', email: 'メールアドレス', company_postal_code: '会社郵便番号',
+      company_prefecture: '会社都道府県', company_city: '会社市区町村', company_street: '会社番地',
+      rep_postal_code: '代表者郵便番号', rep_prefecture: '代表者都道府県', rep_city: '代表者市区町村',
+      rep_street: '代表者番地', capital: '資本金', monthly_revenue: '月商', employees: '従業員数',
+      founded_year: '設立年', purchase_amount: '買取希望額', purchase_date: '買取希望日',
+      payday: '給料日', total_salary: '給与総支給額', business_description: '事業内容',
+      current_account: '当座', payment_schedule: '支払予定', tax_payment_status: '納税状況',
+      tax_payment_detail: '納税詳細', other_companies: '他社利用状況', notes: '備考',
+      registered_at: '登録日', company_address_type: '会社住所種別', rep_address_type: '代表者住所種別',
+    }
+    const keys = errs ? Object.keys(errs) : []
+    const parts = keys.map((k) => {
+      const msg = errs?.[k]?.message
+      const name = labels[k] ?? k
+      return msg ? `${name}（${msg}）` : name
+    })
+    setInvalidMsg(
+      parts.length > 0
+        ? `次の項目をご確認ください: ${parts.join(' / ')}`
+        : '未入力または形式に誤りのある項目があります。'
+    )
+    const first = keys[0]
     if (first) {
       const el = document.querySelector(`[name="${first}"]`) as HTMLElement | null
       el?.scrollIntoView({ behavior: 'smooth', block: 'center' })
