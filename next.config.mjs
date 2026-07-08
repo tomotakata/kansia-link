@@ -28,6 +28,7 @@ const nextConfig = {
     // Include font file + proposal HTML in serverless function bundle
     outputFileTracingIncludes: {
       '**': ['./resources/fonts/**', './public/infra-proposal.html'],
+      '/api/yomi': ['./node_modules/kuromoji/dict/**'],
     },
   },
 }

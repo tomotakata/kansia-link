@@ -162,70 +162,63 @@ export default function CompanyForm({ company }: CompanyFormProps) {
   const repZipReg = register('rep_postal_code')
 
   // Company/Rep name -> katakana auto input.
-  // IME reading is captured from BOTH compositionupdate(event.data) and the
-  // live field value during composition. We keep the LONGEST all-kana reading
-  // seen in a composition session, then commit it on compositionend. This is
-  // robust against IMEs (e.g. macOS) that drop the last mora from event.data.
-  const kanaAccum = useRef<{ company: string; rep: string }>({ company: '', rep: '' })
-  const kanaMax = useRef<{ company: string; rep: string }>({ company: '', rep: '' })
+  // The confirmed name text (kanji/kana/mixed) is sent to /api/yomi, which uses
+  // a morphological analyzer (kuromoji) to derive the reading. This is accurate
+  // regardless of how the user typed (incl. predictive IME conversion).
+  const yomiTimer = useRef<{ company?: ReturnType<typeof setTimeout>; rep?: ReturnType<typeof setTimeout> }>({})
+  const composingRef = useRef<{ company: boolean; rep: boolean }>({ company: false, rep: false })
 
-  const toKatakana = (s: string) =>
-    s.replace(/[\u3041-\u3096]/g, (c) => String.fromCharCode(c.charCodeAt(0) + 0x60))
-
-  // Leading run of kana (hiragana/katakana/長音); ignore trailing latin the IME
-  // may leave while composing (e.g. "かぶしk").
-  const leadingReading = (s: string) => {
-    const m = s.match(/^[\u3041-\u309F\u30A1-\u30FFー]+/)
-    return m ? m[0] : ''
-  }
-
-  const considerReading = (target: 'company' | 'rep', raw: string) => {
-    const r = leadingReading(raw)
-    if (r.length > kanaMax.current[target].length) kanaMax.current[target] = r
-  }
-
-  const commitReading = (target: 'company' | 'rep') => {
-    const reading = kanaMax.current[target]
-    if (reading) {
-      kanaAccum.current[target] += toKatakana(reading)
-      setValue(
-        target === 'company' ? 'company_name_kana' : 'rep_name_kana',
-        kanaAccum.current[target],
-        { shouldValidate: false }
-      )
-    }
-    kanaMax.current[target] = ''
-  }
-
-  const handleNameComposition = useCallback(
-    (target: 'company' | 'rep', phase: 'start' | 'update' | 'end', data: string) => {
-      if (phase === 'start') {
-        kanaMax.current[target] = ''
-      } else if (phase === 'update') {
-        considerReading(target, data)
-      } else {
-        considerReading(target, data)
-        commitReading(target)
+  const fetchYomi = useCallback(
+    async (target: 'company' | 'rep', text: string) => {
+      const kanaField = target === 'company' ? 'company_name_kana' : 'rep_name_kana'
+      const trimmed = text.trim()
+      if (!trimmed) {
+        setValue(kanaField, '', { shouldValidate: false })
+        return
+      }
+      try {
+        const res = await fetch(`/api/yomi?text=${encodeURIComponent(trimmed)}`)
+        if (!res.ok) return
+        const { kana } = (await res.json()) as { kana: string }
+        if (kana) setValue(kanaField, kana, { shouldValidate: false })
+      } catch {
+        // network error -> silently skip auto-fill
       }
     },
     [setValue]
   )
 
+  const scheduleYomi = useCallback(
+    (target: 'company' | 'rep', text: string) => {
+      if (yomiTimer.current[target]) clearTimeout(yomiTimer.current[target])
+      yomiTimer.current[target] = setTimeout(() => {
+        // skip while IME composition is still in progress
+        if (composingRef.current[target]) return
+        void fetchYomi(target, text)
+      }, 450)
+    },
+    [fetchYomi]
+  )
+
   const handleNameInput = useCallback(
     (target: 'company' | 'rep', value: string, isComposing: boolean) => {
       if (value.length === 0) {
-        // Name cleared -> reset kana entirely
-        kanaAccum.current[target] = ''
-        kanaMax.current[target] = ''
         setValue(target === 'company' ? 'company_name_kana' : 'rep_name_kana', '', {
           shouldValidate: false,
         })
         return
       }
-      // While composing, the field value holds the reading before conversion.
-      if (isComposing) considerReading(target, value)
+      if (!isComposing) scheduleYomi(target, value)
     },
-    [setValue]
+    [scheduleYomi, setValue]
+  )
+
+  const handleNameCompositionEnd = useCallback(
+    (target: 'company' | 'rep', value: string) => {
+      composingRef.current[target] = false
+      scheduleYomi(target, value)
+    },
+    [scheduleYomi]
   )
 
 
@@ -324,13 +317,13 @@ export default function CompanyForm({ company }: CompanyFormProps) {
                     e.target.value,
                     (e.nativeEvent as InputEvent).isComposing ?? false
                   ),
+                onBlur: (e) => scheduleYomi('company', e.target.value),
               })}
-              onCompositionStart={() => handleNameComposition('company', 'start', '')}
-              onCompositionUpdate={(e) =>
-                handleNameComposition('company', 'update', e.data ?? '')
-              }
+              onCompositionStart={() => {
+                composingRef.current.company = true
+              }}
               onCompositionEnd={(e) =>
-                handleNameComposition('company', 'end', e.data ?? '')
+                handleNameCompositionEnd('company', (e.target as HTMLInputElement).value)
               }
               className="form-input"
               placeholder="会社名"
@@ -436,10 +429,14 @@ export default function CompanyForm({ company }: CompanyFormProps) {
                     e.target.value,
                     (e.nativeEvent as InputEvent).isComposing ?? false
                   ),
+                onBlur: (e) => scheduleYomi('rep', e.target.value),
               })}
-              onCompositionStart={() => handleNameComposition('rep', 'start', '')}
-              onCompositionUpdate={(e) => handleNameComposition('rep', 'update', e.data ?? '')}
-              onCompositionEnd={(e) => handleNameComposition('rep', 'end', e.data ?? '')}
+              onCompositionStart={() => {
+                composingRef.current.rep = true
+              }}
+              onCompositionEnd={(e) =>
+                handleNameCompositionEnd('rep', (e.target as HTMLInputElement).value)
+              }
               className="form-input"
               placeholder="代表者名"
             />
