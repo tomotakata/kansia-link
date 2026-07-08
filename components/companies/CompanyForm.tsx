@@ -161,45 +161,69 @@ export default function CompanyForm({ company }: CompanyFormProps) {
   const companyZipReg = register('company_postal_code')
   const repZipReg = register('rep_postal_code')
 
-  // Company/Rep name -> katakana auto input (capture IME reading via composition events)
+  // Company/Rep name -> katakana auto input.
+  // IME reading is captured from BOTH compositionupdate(event.data) and the
+  // live field value during composition. We keep the LONGEST all-kana reading
+  // seen in a composition session, then commit it on compositionend. This is
+  // robust against IMEs (e.g. macOS) that drop the last mora from event.data.
   const kanaAccum = useRef<{ company: string; rep: string }>({ company: '', rep: '' })
-  const kanaPending = useRef<{ company: string; rep: string }>({ company: '', rep: '' })
+  const kanaMax = useRef<{ company: string; rep: string }>({ company: '', rep: '' })
 
   const toKatakana = (s: string) =>
     s.replace(/[\u3041-\u3096]/g, (c) => String.fromCharCode(c.charCodeAt(0) + 0x60))
-  const isReading = (s: string) => s.length > 0 && /^[\u3041-\u309Fー\u30fc]+$/.test(s)
+
+  // Leading run of kana (hiragana/katakana/長音); ignore trailing latin the IME
+  // may leave while composing (e.g. "かぶしk").
+  const leadingReading = (s: string) => {
+    const m = s.match(/^[\u3041-\u309F\u30A1-\u30FFー]+/)
+    return m ? m[0] : ''
+  }
+
+  const considerReading = (target: 'company' | 'rep', raw: string) => {
+    const r = leadingReading(raw)
+    if (r.length > kanaMax.current[target].length) kanaMax.current[target] = r
+  }
+
+  const commitReading = (target: 'company' | 'rep') => {
+    const reading = kanaMax.current[target]
+    if (reading) {
+      kanaAccum.current[target] += toKatakana(reading)
+      setValue(
+        target === 'company' ? 'company_name_kana' : 'rep_name_kana',
+        kanaAccum.current[target],
+        { shouldValidate: false }
+      )
+    }
+    kanaMax.current[target] = ''
+  }
 
   const handleNameComposition = useCallback(
-    (
-      target: 'company' | 'rep',
-      phase: 'update' | 'end',
-      data: string
-    ) => {
-      const kanaField = target === 'company' ? 'company_name_kana' : 'rep_name_kana'
-      if (phase === 'update') {
-        if (isReading(data)) kanaPending.current[target] = data
+    (target: 'company' | 'rep', phase: 'start' | 'update' | 'end', data: string) => {
+      if (phase === 'start') {
+        kanaMax.current[target] = ''
+      } else if (phase === 'update') {
+        considerReading(target, data)
       } else {
-        const reading = kanaPending.current[target]
-        if (reading) {
-          kanaAccum.current[target] += toKatakana(reading)
-          setValue(kanaField, kanaAccum.current[target], { shouldValidate: false })
-        }
-        kanaPending.current[target] = ''
+        considerReading(target, data)
+        commitReading(target)
       }
     },
     [setValue]
   )
 
   const handleNameInput = useCallback(
-    (target: 'company' | 'rep', value: string) => {
-      // Reset kana when the name field is cleared
+    (target: 'company' | 'rep', value: string, isComposing: boolean) => {
       if (value.length === 0) {
+        // Name cleared -> reset kana entirely
         kanaAccum.current[target] = ''
-        kanaPending.current[target] = ''
+        kanaMax.current[target] = ''
         setValue(target === 'company' ? 'company_name_kana' : 'rep_name_kana', '', {
           shouldValidate: false,
         })
+        return
       }
+      // While composing, the field value holds the reading before conversion.
+      if (isComposing) considerReading(target, value)
     },
     [setValue]
   )
@@ -294,13 +318,19 @@ export default function CompanyForm({ company }: CompanyFormProps) {
             <input
               id="company_name"
               {...register('company_name', {
-                onChange: (e) => handleNameInput('company', e.target.value),
+                onChange: (e) =>
+                  handleNameInput(
+                    'company',
+                    e.target.value,
+                    (e.nativeEvent as InputEvent).isComposing ?? false
+                  ),
               })}
+              onCompositionStart={() => handleNameComposition('company', 'start', '')}
               onCompositionUpdate={(e) =>
-                handleNameComposition('company', 'update', e.data)
+                handleNameComposition('company', 'update', e.data ?? '')
               }
               onCompositionEnd={(e) =>
-                handleNameComposition('company', 'end', e.data)
+                handleNameComposition('company', 'end', e.data ?? '')
               }
               className="form-input"
               placeholder="会社名"
@@ -400,10 +430,16 @@ export default function CompanyForm({ company }: CompanyFormProps) {
             <input
               id="rep_name"
               {...register('rep_name', {
-                onChange: (e) => handleNameInput('rep', e.target.value),
+                onChange: (e) =>
+                  handleNameInput(
+                    'rep',
+                    e.target.value,
+                    (e.nativeEvent as InputEvent).isComposing ?? false
+                  ),
               })}
-              onCompositionUpdate={(e) => handleNameComposition('rep', 'update', e.data)}
-              onCompositionEnd={(e) => handleNameComposition('rep', 'end', e.data)}
+              onCompositionStart={() => handleNameComposition('rep', 'start', '')}
+              onCompositionUpdate={(e) => handleNameComposition('rep', 'update', e.data ?? '')}
+              onCompositionEnd={(e) => handleNameComposition('rep', 'end', e.data ?? '')}
               className="form-input"
               placeholder="代表者名"
             />
