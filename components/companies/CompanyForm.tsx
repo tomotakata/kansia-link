@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useEffect } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { useFormState } from 'react-dom'
 import { useForm, Controller } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
@@ -115,6 +115,52 @@ export default function CompanyForm({ company }: CompanyFormProps) {
       setValue('rep_address_type', companyAddressType ?? null)
     }
   }, [repAddressSame, companyPrefecture, companyCity, companyStreet, companyPostalCode, companyAddressOwner, companyAddressType, setValue])
+
+  // Postal code -> address auto lookup (zipcloud API, no key / CORS enabled)
+  const [zipStatus, setZipStatus] = useState<{
+    company: 'idle' | 'loading' | 'notfound'
+    rep: 'idle' | 'loading' | 'notfound'
+  }>({ company: 'idle', rep: 'idle' })
+
+  const handleZipLookup = useCallback(
+    async (value: string, target: 'company' | 'rep') => {
+      const digits = (value ?? '').replace(/[^0-9]/g, '')
+      if (digits.length !== 7) return
+      setZipStatus((s) => ({ ...s, [target]: 'loading' }))
+      try {
+        const res = await fetch(
+          `https://zipcloud.ibsnet.co.jp/api/search?zipcode=${digits}`
+        )
+        const json = (await res.json()) as {
+          results?: { address1: string; address2: string; address3: string }[] | null
+        }
+        const r = json.results?.[0]
+        if (r) {
+          if (target === 'company') {
+            setValue('company_prefecture', r.address1 || '', { shouldValidate: true })
+            setValue('company_city', `${r.address2 || ''}${r.address3 || ''}`, {
+              shouldValidate: true,
+            })
+          } else {
+            setValue('rep_prefecture', r.address1 || '', { shouldValidate: true })
+            setValue('rep_city', `${r.address2 || ''}${r.address3 || ''}`, {
+              shouldValidate: true,
+            })
+          }
+          setZipStatus((s) => ({ ...s, [target]: 'idle' }))
+        } else {
+          setZipStatus((s) => ({ ...s, [target]: 'notfound' }))
+        }
+      } catch {
+        setZipStatus((s) => ({ ...s, [target]: 'notfound' }))
+      }
+    },
+    [setValue]
+  )
+
+  const companyZipReg = register('company_postal_code')
+  const repZipReg = register('rep_postal_code')
+
 
   // Build the bound action for useFormState
   const boundAction = useCallback(
@@ -339,7 +385,22 @@ export default function CompanyForm({ company }: CompanyFormProps) {
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           <div>
             <label htmlFor="company_postal_code" className="form-label">郵便番号</label>
-            <input id="company_postal_code" {...register('company_postal_code')} className="form-input" placeholder="郵便番号" />
+            <input
+              id="company_postal_code"
+              {...companyZipReg}
+              onChange={(e) => {
+                companyZipReg.onChange(e)
+                void handleZipLookup(e.target.value, 'company')
+              }}
+              className="form-input"
+              placeholder="例: 5300001（ハイフンなし可）"
+            />
+            {zipStatus.company === 'loading' && (
+              <p className="text-xs text-gray-500 mt-1">住所を検索中...</p>
+            )}
+            {zipStatus.company === 'notfound' && (
+              <p className="text-xs text-amber-600 mt-1">該当する住所が見つかりませんでした</p>
+            )}
             <ErrorMessage message={errors.company_postal_code?.message} />
           </div>
           <div>
@@ -388,7 +449,22 @@ export default function CompanyForm({ company }: CompanyFormProps) {
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <div>
                 <label htmlFor="rep_postal_code" className="form-label">郵便番号</label>
-                <input id="rep_postal_code" {...register('rep_postal_code')} className="form-input" placeholder="郵便番号" />
+                <input
+                  id="rep_postal_code"
+                  {...repZipReg}
+                  onChange={(e) => {
+                    repZipReg.onChange(e)
+                    void handleZipLookup(e.target.value, 'rep')
+                  }}
+                  className="form-input"
+                  placeholder="例: 5300011（ハイフンなし可）"
+                />
+                {zipStatus.rep === 'loading' && (
+                  <p className="text-xs text-gray-500 mt-1">住所を検索中...</p>
+                )}
+                {zipStatus.rep === 'notfound' && (
+                  <p className="text-xs text-amber-600 mt-1">該当する住所が見つかりませんでした</p>
+                )}
                 <ErrorMessage message={errors.rep_postal_code?.message} />
               </div>
               <div>
