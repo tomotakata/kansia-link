@@ -11,6 +11,14 @@ const toHalfWidth = (s: string) =>
 const normStr = <T extends z.ZodTypeAny>(schema: T) =>
   z.preprocess((v) => (typeof v === 'string' ? toHalfWidth(v).trim() : v), schema)
 
+// Optional enum where an unselected <select> yields '' (empty string).
+// Treat '' / null / undefined as null so leaving it blank is always valid.
+const optionalEnum = <T extends [string, ...string[]]>(vals: T) =>
+  z.preprocess(
+    (v) => (v === '' || v == null ? null : v),
+    z.enum(vals).nullable().optional()
+  )
+
 const PaymentScheduleSchema = z.object({
   company: z.string().max(200).default(''),
   address: z.string().max(300).default(''),
@@ -43,11 +51,11 @@ export const CompanySchema = z.object({
       .optional()
       .or(z.literal(''))
   ),
-  birth_era: z.enum(['西暦', 'S', 'H']).nullable().optional(),
+  birth_era: optionalEnum(['西暦', 'S', 'H']),
   birth_year: z.number().int().min(1800).max(2100).nullable().optional(),
   birth_month: z.number().int().min(1).max(12).nullable().optional(),
   birth_day: z.number().int().min(1).max(31).nullable().optional(),
-  gender: z.enum(['男性', '女性']).nullable().optional(),
+  gender: optionalEnum(['男性', '女性']),
   rep_name: z.string().max(100).nullable().optional(),
   rep_name_kana: z.string().max(100).nullable().optional(),
   mobile_phone: normStr(
@@ -76,7 +84,7 @@ export const CompanySchema = z.object({
       .optional()
       .or(z.literal(''))
   ),
-  company_address_type: z.enum(['賃貸', '所有']).nullable().optional(),
+  company_address_type: optionalEnum(['賃貸', '所有']),
   company_address_owner: z.string().max(100).nullable().optional(),
   company_postal_code: normStr(
     z
@@ -91,7 +99,7 @@ export const CompanySchema = z.object({
   company_city: z.string().max(100).nullable().optional(),
   company_street: z.string().max(300).nullable().optional(),
   rep_address_same: z.boolean().default(false),
-  rep_address_type: z.enum(['賃貸', '所有']).nullable().optional(),
+  rep_address_type: optionalEnum(['賃貸', '所有']),
   rep_address_owner: z.string().max(100).nullable().optional(),
   rep_postal_code: normStr(
     z
@@ -116,7 +124,7 @@ export const CompanySchema = z.object({
   business_description: z.string().max(2000).nullable().optional(),
   current_account: z.enum(['なし', 'あり']).default('なし'),
   payment_schedule: z.array(PaymentScheduleSchema).max(3).default([]),
-  tax_payment_status: z.enum(['未納', '完納']).nullable().optional(),
+  tax_payment_status: optionalEnum(['未納', '完納']),
   tax_payment_detail: z.string().max(1000).nullable().optional(),
   other_companies: z.string().max(1000).nullable().optional(),
   notes: z.string().max(2000).nullable().optional(),
