@@ -334,7 +334,7 @@ export default function CompanyForm({ company }: CompanyFormProps) {
             {...register('registered_at')}
             className="form-input w-44"
           />
-          <button type="submit" onClick={() => { submitByButtonRef.current = true }} disabled={isSubmitting} className="btn-primary flex items-center gap-2">
+          <button type="submit" onClick={(e) => { if (e.detail > 0) submitByButtonRef.current = true }} disabled={isSubmitting} className="btn-primary flex items-center gap-2">
             {isSubmitting && <LoadingSpinner size="sm" />}
             登録
           </button>
@@ -828,7 +828,7 @@ export default function CompanyForm({ company }: CompanyFormProps) {
 
       {/* Submit */}
       <div className="flex justify-end mb-6">
-        <button type="submit" onClick={() => { submitByButtonRef.current = true }} disabled={isSubmitting} className="btn-primary flex items-center gap-2">
+        <button type="submit" onClick={(e) => { if (e.detail > 0) submitByButtonRef.current = true }} disabled={isSubmitting} className="btn-primary flex items-center gap-2">
           {isSubmitting && <LoadingSpinner size="sm" />}
           {isEdit ? '更新' : '登録'}
         </button>
