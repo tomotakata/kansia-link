@@ -297,7 +297,22 @@ export default function CompanyForm({ company }: CompanyFormProps) {
   }
 
   return (
-    <form onSubmit={handleSubmit(onSubmit, onInvalid)} noValidate>
+    <form
+      onSubmit={handleSubmit(onSubmit, onInvalid)}
+      onKeyDown={(e) => {
+        // Prevent implicit form submission on Enter. Allow Enter only in
+        // <textarea> (multi-line) and when a submit button itself is focused.
+        if (e.key !== 'Enter') return
+        const target = e.target as HTMLElement
+        const tag = target.tagName
+        const isSubmitBtn =
+          tag === 'BUTTON' && (target as HTMLButtonElement).type === 'submit'
+        if (tag !== 'TEXTAREA' && !isSubmitBtn) {
+          e.preventDefault()
+        }
+      }}
+      noValidate
+    >
       {/* Header row */}
       <div className="flex items-center justify-between mb-4">
         <label className="flex items-center gap-2 text-sm cursor-pointer">
