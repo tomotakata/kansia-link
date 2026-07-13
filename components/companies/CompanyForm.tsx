@@ -228,7 +228,13 @@ export default function CompanyForm({ company }: CompanyFormProps) {
   )
 
 
+  const submitByButtonRef = useRef(false)
+
   async function onSubmit(data: CompanyFormData): Promise<void> {
+    // Only save when the user actually clicked a save button.
+    // Prevents Enter key (implicit submit) from persisting the record.
+    if (!submitByButtonRef.current) return
+    submitByButtonRef.current = false
     setInvalidMsg(null)
     setServerState({ error: null, success: false })
     const fd = new FormData()
@@ -262,6 +268,7 @@ export default function CompanyForm({ company }: CompanyFormProps) {
   // Surface validation failures so the submit button never "does nothing"
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   function onInvalid(errs: any): void {
+    submitByButtonRef.current = false
     const labels: Record<string, string> = {
       star_rating: '評価', company_name: '会社名', company_name_kana: '会社名カナ',
       company_phone: '会社電話番号', company_fax: 'FAX番号', birth_era: '生年(元号)',
@@ -327,7 +334,7 @@ export default function CompanyForm({ company }: CompanyFormProps) {
             {...register('registered_at')}
             className="form-input w-44"
           />
-          <button type="submit" disabled={isSubmitting} className="btn-primary flex items-center gap-2">
+          <button type="submit" onClick={() => { submitByButtonRef.current = true }} disabled={isSubmitting} className="btn-primary flex items-center gap-2">
             {isSubmitting && <LoadingSpinner size="sm" />}
             登録
           </button>
@@ -821,7 +828,7 @@ export default function CompanyForm({ company }: CompanyFormProps) {
 
       {/* Submit */}
       <div className="flex justify-end mb-6">
-        <button type="submit" disabled={isSubmitting} className="btn-primary flex items-center gap-2">
+        <button type="submit" onClick={() => { submitByButtonRef.current = true }} disabled={isSubmitting} className="btn-primary flex items-center gap-2">
           {isSubmitting && <LoadingSpinner size="sm" />}
           {isEdit ? '更新' : '登録'}
         </button>
