@@ -228,13 +228,7 @@ export default function CompanyForm({ company }: CompanyFormProps) {
   )
 
 
-  const submitByButtonRef = useRef(false)
-
   async function onSubmit(data: CompanyFormData): Promise<void> {
-    // Only save when the user actually clicked a save button.
-    // Prevents Enter key (implicit submit) from persisting the record.
-    if (!submitByButtonRef.current) return
-    submitByButtonRef.current = false
     setInvalidMsg(null)
     setServerState({ error: null, success: false })
     const fd = new FormData()
@@ -268,7 +262,6 @@ export default function CompanyForm({ company }: CompanyFormProps) {
   // Surface validation failures so the submit button never "does nothing"
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   function onInvalid(errs: any): void {
-    submitByButtonRef.current = false
     const labels: Record<string, string> = {
       star_rating: '評価', company_name: '会社名', company_name_kana: '会社名カナ',
       company_phone: '会社電話番号', company_fax: 'FAX番号', birth_era: '生年(元号)',
@@ -305,16 +298,10 @@ export default function CompanyForm({ company }: CompanyFormProps) {
 
   return (
     <form
-      onSubmit={handleSubmit(onSubmit, onInvalid)}
+      onSubmit={(e) => e.preventDefault()}
       onKeyDown={(e) => {
-        // Prevent implicit form submission on Enter. Allow Enter only in
-        // <textarea> (multi-line) and when a submit button itself is focused.
-        if (e.key !== 'Enter') return
-        const target = e.target as HTMLElement
-        const tag = target.tagName
-        const isSubmitBtn =
-          tag === 'BUTTON' && (target as HTMLButtonElement).type === 'submit'
-        if (tag !== 'TEXTAREA' && !isSubmitBtn) {
+        // Block Enter from doing anything except newlines in <textarea>.
+        if (e.key === 'Enter' && (e.target as HTMLElement).tagName !== 'TEXTAREA') {
           e.preventDefault()
         }
       }}
@@ -334,7 +321,7 @@ export default function CompanyForm({ company }: CompanyFormProps) {
             {...register('registered_at')}
             className="form-input w-44"
           />
-          <button type="submit" onClick={(e) => { if (e.detail > 0) submitByButtonRef.current = true }} disabled={isSubmitting} className="btn-primary flex items-center gap-2">
+          <button type="button" onClick={handleSubmit(onSubmit, onInvalid)} disabled={isSubmitting} className="btn-primary flex items-center gap-2">
             {isSubmitting && <LoadingSpinner size="sm" />}
             登録
           </button>
@@ -828,7 +815,7 @@ export default function CompanyForm({ company }: CompanyFormProps) {
 
       {/* Submit */}
       <div className="flex justify-end mb-6">
-        <button type="submit" onClick={(e) => { if (e.detail > 0) submitByButtonRef.current = true }} disabled={isSubmitting} className="btn-primary flex items-center gap-2">
+        <button type="button" onClick={handleSubmit(onSubmit, onInvalid)} disabled={isSubmitting} className="btn-primary flex items-center gap-2">
           {isSubmitting && <LoadingSpinner size="sm" />}
           {isEdit ? '更新' : '登録'}
         </button>
