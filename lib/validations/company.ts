@@ -31,7 +31,7 @@ export const CompanySchema = z.object({
   is_hidden: z.boolean().default(false),
   registered_at: z.string().nullable().optional(),
   star_rating: z.number().int().min(1).max(5).nullable().optional(),
-  company_name: z.string().min(1, '会社名は必須です').max(200),
+  company_name: z.string().max(200).optional().default(''),
   company_name_kana: z.string().max(200).nullable().optional(),
   company_phone: normStr(
     z
@@ -128,7 +128,10 @@ export const CompanySchema = z.object({
   tax_payment_detail: z.string().max(1000).nullable().optional(),
   other_companies: z.string().max(1000).nullable().optional(),
   notes: z.string().max(2000).nullable().optional(),
-})
+}).refine(
+  (data) => Boolean((data.company_name ?? '').trim() || (data.rep_name ?? '').trim()),
+  { message: '会社名または代表者名のいずれかを入力してください', path: ['company_name'] }
+)
 
 export type CompanyFormData = z.infer<typeof CompanySchema>
 

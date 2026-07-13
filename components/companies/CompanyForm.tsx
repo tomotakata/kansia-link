@@ -354,7 +354,7 @@ export default function CompanyForm({ company }: CompanyFormProps) {
         <p className="section-title">会社情報</p>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div className="md:col-span-2">
-            <label htmlFor="company_name" className="form-label">会社名 <span className="text-red-500">*</span></label>
+            <label htmlFor="company_name" className="form-label">会社名 <span className="text-xs text-gray-500">（会社名または代表者名のいずれか必須）</span></label>
             <input
               id="company_name"
               {...register('company_name', {
