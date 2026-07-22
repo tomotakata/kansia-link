@@ -36,8 +36,7 @@ export const CompanySchema = z.object({
   company_phone: normStr(
     z
       .string()
-      .max(20)
-      .regex(/^[0-9\-+() ]*$/, '電話番号の形式が正しくありません')
+      .max(50)
       .nullable()
       .optional()
       .or(z.literal(''))
@@ -45,8 +44,7 @@ export const CompanySchema = z.object({
   company_fax: normStr(
     z
       .string()
-      .max(20)
-      .regex(/^[0-9\-+() ]*$/, 'FAX番号の形式が正しくありません')
+      .max(50)
       .nullable()
       .optional()
       .or(z.literal(''))
@@ -61,8 +59,7 @@ export const CompanySchema = z.object({
   mobile_phone: normStr(
     z
       .string()
-      .max(20)
-      .regex(/^[0-9\-+() ]*$/, '携帯番号の形式が正しくありません')
+      .max(50)
       .nullable()
       .optional()
       .or(z.literal(''))
@@ -70,8 +67,7 @@ export const CompanySchema = z.object({
   home_phone: normStr(
     z
       .string()
-      .max(20)
-      .regex(/^[0-9\-+() ]*$/, '電話番号の形式が正しくありません')
+      .max(50)
       .nullable()
       .optional()
       .or(z.literal(''))
