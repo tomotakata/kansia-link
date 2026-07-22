@@ -78,7 +78,7 @@ export async function generateCompanyPdf(company: Company): Promise<Uint8Array> 
   const BLUE: [number, number, number] = [30, 80, 160]
 
   // ── Drawing helpers ───────────────────────────────────────────────────
-  const setStroke = () => { doc.setDrawColor(...BLUE); doc.setLineWidth(0.3) }
+  const setStroke = () => { doc.setDrawColor(...BLUE); doc.setLineWidth(0.5) }
   const lbl = (text: string, x: number, y: number) => {
     doc.setFontSize(7); doc.setTextColor(...BLUE)
     doc.text(text, x, y)
@@ -135,7 +135,7 @@ export async function generateCompanyPdf(company: Company): Promise<Uint8Array> 
 
   // ── Outer border ──────────────────────────────────────────────────────
   doc.setDrawColor(...BLUE)
-  doc.setLineWidth(0.3)
+  doc.setLineWidth(0.8)
   doc.rect(L, T, W, tableBottom - T)
 
   // ── Column x-positions ────────────────────────────────────────────────
