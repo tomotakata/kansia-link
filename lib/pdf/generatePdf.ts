@@ -352,7 +352,10 @@ export async function generateCompanyPdf(company: Company): Promise<Uint8Array> 
       val(toStr(p.company),    L + 1,        Y(ri) + 6, 55)
       val(toStr(p.address),    CD_PAY1 + 1,  Y(ri) + 6, 51)
       val(toStr(p.amount),     CD_PAY2 + 1,  Y(ri) + 6, 23)
-      val(toStr(p.condition1), CD_PAY3 + 1,  Y(ri) + 6, 44)
+      const conditions = [toStr(p.condition1), toStr(p.condition2)]
+        .filter((s) => s.trim() !== '')
+        .join(' / ')
+      val(conditions, CD_PAY3 + 1,  Y(ri) + 6, 44)
     }
   })
 
