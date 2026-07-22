@@ -31,6 +31,7 @@ export const CompanySchema = z.object({
   is_hidden: z.boolean().default(false),
   registered_at: z.string().nullable().optional(),
   star_rating: z.number().int().min(1).max(5).nullable().optional(),
+  header_note: z.string().max(300).nullable().optional(),
   company_name: z.string().max(200).optional().default(''),
   company_name_kana: z.string().max(200).nullable().optional(),
   company_phone: normStr(

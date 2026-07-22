@@ -164,10 +164,13 @@ export async function generateCompanyPdf(company: Company): Promise<Uint8Array> 
   hLine(L, R, Y(0) + H(0))
   vLine(CD_MAIN, Y(0), Y(0) + H(0))
   lbl('※', L + 1, Y(0) + 5)
+  let hnX = L + 6
   if (company.star_rating) {
     doc.setFontSize(8); doc.setTextColor(0, 0, 0)
     doc.text('★'.repeat(company.star_rating), L + 6, Y(0) + 5)
+    hnX = L + 6 + company.star_rating * 3.5 + 3
   }
+  val(toStr(company.header_note), hnX, Y(0) + 5, CD_MAIN - hnX - 2)
   lbl('番号', CD_MAIN + 1, Y(0) + 3)
   val(toNum(company.id), CD_MAIN + 1, Y(0) + 7)
 

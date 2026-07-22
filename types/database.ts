@@ -9,6 +9,7 @@ export type Database = {
           is_hidden: boolean
           registered_at: string | null
           star_rating: number | null
+          header_note: string | null
           company_name: string
           company_name_kana: string | null
           company_phone: string | null

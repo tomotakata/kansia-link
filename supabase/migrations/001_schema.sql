@@ -9,6 +9,7 @@ CREATE TABLE IF NOT EXISTS companies (
   is_hidden              boolean NOT NULL DEFAULT false,
   registered_at          date,
   star_rating            smallint CHECK (star_rating BETWEEN 1 AND 5),
+  header_note            text,
   company_name           text NOT NULL,
   company_name_kana      text,
   company_phone          text,

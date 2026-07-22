@@ -40,6 +40,7 @@ export default function CompanyForm({ company }: CompanyFormProps) {
     is_hidden: company?.is_hidden ?? false,
     registered_at: company?.registered_at ?? new Date().toISOString().slice(0, 10),
     star_rating: company?.star_rating ?? null,
+    header_note: company?.header_note ?? '',
     company_name: company?.company_name ?? '',
     company_name_kana: company?.company_name_kana ?? '',
     company_phone: company?.company_phone ?? '',
@@ -357,6 +358,11 @@ export default function CompanyForm({ company }: CompanyFormProps) {
           ))}
         </div>
         <ErrorMessage message={errors.star_rating?.message} />
+        <div className="mt-4">
+          <label htmlFor="header_note" className="form-label">自由記入欄（PDF最上部に表示）</label>
+          <input id="header_note" {...register('header_note')} className="form-input" placeholder="自由に入力できます" />
+          <ErrorMessage message={errors.header_note?.message} />
+        </div>
       </div>
 
       {/* Company Info */}
